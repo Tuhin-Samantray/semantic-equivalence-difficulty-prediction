@@ -59,3 +59,7 @@ Thumbs.db
 !experiments/results/*.csv
 !data/sample/*.csv
 !data/sample/*.json
+
+# Exceptions: set D follow-up results
+!experiments/results_D/*.json
+!experiments/results_D/*.csv
