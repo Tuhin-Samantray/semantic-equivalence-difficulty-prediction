@@ -28,7 +28,7 @@ def main() -> None:
     ap.add_argument("--data", default="data/processed/dataset.csv")
     ap.add_argument("--out", default="experiments/results")
     ap.add_argument("--ours", default="E", choices=list(FEATURE_SETS), help="feature set used as 'our' model")
-    ap.add_argument("--model", default="auto", help="model name or 'auto' (best CV MAE on --ours)")
+    ap.add_argument("--model", default="auto", help="model name or 'auto' (best CV MAE on --ours, training split only)")
     ap.add_argument("--folds", type=int, default=5)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
@@ -38,6 +38,7 @@ def main() -> None:
     df = pd.read_csv(a.data)
     y = df["log_cost"].to_numpy()
     groups = df["base_id"].to_numpy()
+    tr, te = next(GroupShuffleSplit(1, test_size=0.2, random_state=a.seed).split(df, y, groups))
     print(f"{len(df)} pairs, {df.base_id.nunique()} base programs, "
           f"{100 * df.is_timeout.mean():.1f}% timeouts")
 
@@ -51,14 +52,17 @@ def main() -> None:
     plots.model_comparison(cv, out / "03_model_comparison.png")
     best_model = a.model
     if best_model == "auto":
-        sub = cv[cv.set == a.ours].sort_values("mae_mean")
-        best_model = str(sub.iloc[0]["model"])
+        # select on the TRAINING split only, so held-out test rows never influence the choice
+        cv_sel = cross_validate(df.iloc[tr].reset_index(drop=True), y[tr], groups[tr], [a.ours],
+                                MODEL_NAMES, a.folds, a.seed).sort_values("mae_mean")
+        best_model = str(cv_sel.iloc[0]["model"])
+        print("model selection (training split only):")
+        print(cv_sel[["model", "mae_mean"]].round(4).to_string(index=False))
     print(f"selected model: {best_model}")
     cv_best = cv[cv.model == best_model].set_index("set").loc[keys].reset_index()
     print(cv_best[["set", "label", "mae_mean", "r2_mean", "spearman_mean"]].round(3).to_string(index=False))
 
     # ---- 2. held-out test split (grouped by base program: no leakage) ----------------------
-    tr, te = next(GroupShuffleSplit(1, test_size=0.2, random_state=a.seed).split(df, y, groups))
     fitted = {k: fit_set(df, y, tr, k, best_model, a.seed) for k in keys}
     dte, yte = df.iloc[te].reset_index(drop=True), y[te]
     rows = []
