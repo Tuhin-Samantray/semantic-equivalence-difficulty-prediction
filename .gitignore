@@ -53,3 +53,9 @@ data/verification_logs/*
 # OS-generated files
 .DS_Store
 Thumbs.db
+
+# Exceptions: small committed artifacts (results and a sample dataset)
+!experiments/results/*.json
+!experiments/results/*.csv
+!data/sample/*.csv
+!data/sample/*.json
